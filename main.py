@@ -1,16 +1,18 @@
+import time
+from datetime import datetime
+
 import cv2
 import mediapipe as mp
 import numpy as np
 from scipy.optimize import leastsq
 
 
-# # MediaPipe Handsの初期化
+# MediaPipe Handsの初期化
 def initialize_mediapipe_hands():
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
         static_image_mode=False, max_num_hands=1, min_detection_confidence=0.7
     )
-    # mp_drawing = mp.solutions.drawing_utils
     return hands
 
 
@@ -35,6 +37,13 @@ def calculate_roundness(x, y, xc, yc, r):
     return max(0, roundness)  # 真円度は0%以上
 
 
+# 真円度をファイルに記録
+def log_roundness(roundness):
+    with open("roundness_log.txt", "a") as f:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        f.write(f"{timestamp}, {roundness:.2f}\n")
+
+
 # メイン関数
 def main():
     hands = initialize_mediapipe_hands()
@@ -42,6 +51,8 @@ def main():
     # Webカメラの起動
     cap = cv2.VideoCapture(0)
     trajectory = []
+    last_seen = time.time()
+    hand_detected = True
 
     # 描画ループ
     while cap.isOpened():
@@ -53,7 +64,12 @@ def main():
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = hands.process(rgb_frame)
 
+        current_time = time.time()
+
         if results.multi_hand_landmarks:
+            hand_detected = True
+            last_seen = current_time
+
             for hand_landmarks in results.multi_hand_landmarks:
                 # 人差し指の指先座標を取得（8番目のランドマーク）
                 finger_tip = hand_landmarks.landmark[8]
@@ -74,9 +90,6 @@ def main():
                     xc, yc, r = calc_circle_fitting(x_vals, y_vals)
                     roundness = calculate_roundness(x_vals, y_vals, xc, yc, r)
 
-                    # フィッティングされた円を描画
-                    cv2.circle(frame, (int(xc), int(yc)), int(r), (255, 0, 0), 2)
-
                     # 真円度を表示
                     cv2.putText(
                         frame,
@@ -87,6 +100,18 @@ def main():
                         (0, 0, 255),
                         2,
                     )
+        else:
+            hand_detected = False
+
+        if not hand_detected and (current_time - last_seen > 3):
+            if len(trajectory) > 10:
+                x_vals = np.array([p[0] for p in trajectory])
+                y_vals = np.array([p[1] for p in trajectory])
+                xc, yc, r = calc_circle_fitting(x_vals, y_vals)
+                roundness = calculate_roundness(x_vals, y_vals, xc, yc, r)
+
+                log_roundness(roundness)
+                trajectory = []  # 軌跡をリセット
 
         cv2.imshow("Circle Drawing Test", frame)
 
