@@ -53,6 +53,7 @@ def main():
     trajectory = []
     last_seen = time.time()
     hand_detected = True
+    last_fitted_circle = None
 
     # 描画ループ
     while cap.isOpened():
@@ -90,6 +91,9 @@ def main():
                     xc, yc, r = calc_circle_fitting(x_vals, y_vals)
                     roundness = calculate_roundness(x_vals, y_vals, xc, yc, r)
 
+                    # フィッティングされた円を描画
+                    last_fitted_circle = (int(xc), int(yc), int(r), roundness)
+
                     # 真円度を表示
                     cv2.putText(
                         frame,
@@ -103,6 +107,21 @@ def main():
         else:
             hand_detected = False
 
+        # 手が画面外に出た場合、最後の円を表示
+        if not hand_detected and last_fitted_circle:
+            xc, yc, r, roundness = last_fitted_circle
+            cv2.circle(frame, (xc, yc), r, (255, 0, 0), 2)
+            cv2.putText(
+                frame,
+                f"Roundness: {roundness:.2f}%",
+                (10, 50),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 0, 255),
+                2,
+            )
+
+        # 3秒後にリセット
         if not hand_detected and (current_time - last_seen > 3):
             if len(trajectory) > 10:
                 x_vals = np.array([p[0] for p in trajectory])
@@ -112,6 +131,7 @@ def main():
 
                 log_roundness(roundness)
                 trajectory = []  # 軌跡をリセット
+                last_fitted_circle = None
 
         cv2.imshow("Circle Drawing Test", frame)
 
