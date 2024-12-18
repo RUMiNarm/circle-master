@@ -29,11 +29,23 @@ def calc_circle_fitting(x, y):
     return plsq[0]  # xc, yc, r
 
 
-# 真円度の計算関数
-def calculate_roundness(x, y, xc, yc, r):
+# 改良された真円度の計算関数
+def calculate_improved_roundness(x, y, xc, yc, r):
+    # 中心からの距離を計算
     distances = np.sqrt((x - xc) ** 2 + (y - yc) ** 2)
-    error = np.abs(distances - r)
-    roundness = 100 - (np.mean(error) / r) * 100  # 百分率で誤差率を計算
+    # mean_distance = np.mean(distances)
+
+    # 距離の誤差を計算
+    distance_error = np.abs(distances - r)
+    mean_error = np.mean(distance_error)
+
+    # 滑らかさを計算 (連続する点間の角度変化を評価)
+    angles = np.arctan2(y - yc, x - xc)
+    angle_diffs = np.diff(np.unwrap(angles))
+    smoothness = np.std(angle_diffs)  # 標準偏差が小さいほど滑らか
+
+    # 真円度の総合評価
+    roundness = 100 - ((mean_error / r) * 50 + smoothness * 50)
     return max(0, roundness)  # 真円度は0%以上
 
 
@@ -84,12 +96,14 @@ def main():
                 for i in range(1, len(trajectory)):
                     cv2.line(frame, trajectory[i - 1], trajectory[i], (0, 255, 0), 2)
 
-                # 円フィッティングと真円度の計算
+                # 円フィッティングと改良された真円度の計算
                 if len(trajectory) > 10:
                     x_vals = np.array([p[0] for p in trajectory])
                     y_vals = np.array([p[1] for p in trajectory])
                     xc, yc, r = calc_circle_fitting(x_vals, y_vals)
-                    last_roundness = calculate_roundness(x_vals, y_vals, xc, yc, r)
+                    last_roundness = calculate_improved_roundness(
+                        x_vals, y_vals, xc, yc, r
+                    )
 
                     # 真円度を表示
                     cv2.putText(
@@ -125,7 +139,7 @@ def main():
                 x_vals = np.array([p[0] for p in trajectory])
                 y_vals = np.array([p[1] for p in trajectory])
                 xc, yc, r = calc_circle_fitting(x_vals, y_vals)
-                last_roundness = calculate_roundness(x_vals, y_vals, xc, yc, r)
+                last_roundness = calculate_improved_roundness(x_vals, y_vals, xc, yc, r)
 
                 log_roundness(last_roundness)
                 trajectory = []  # 軌跡をリセット
