@@ -53,7 +53,7 @@ def main():
     trajectory = []
     last_seen = time.time()
     hand_detected = True
-    last_fitted_circle = None
+    last_roundness = None
 
     # 描画ループ
     while cap.isOpened():
@@ -89,15 +89,12 @@ def main():
                     x_vals = np.array([p[0] for p in trajectory])
                     y_vals = np.array([p[1] for p in trajectory])
                     xc, yc, r = calc_circle_fitting(x_vals, y_vals)
-                    roundness = calculate_roundness(x_vals, y_vals, xc, yc, r)
-
-                    # フィッティングされた円を描画
-                    last_fitted_circle = (int(xc), int(yc), int(r), roundness)
+                    last_roundness = calculate_roundness(x_vals, y_vals, xc, yc, r)
 
                     # 真円度を表示
                     cv2.putText(
                         frame,
-                        f"Roundness: {roundness:.2f}%",
+                        f"Roundness: {last_roundness:.2f}%",
                         (10, 50),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         1,
@@ -107,13 +104,14 @@ def main():
         else:
             hand_detected = False
 
-        # 手が画面外に出た場合、最後の円を表示
-        if not hand_detected and last_fitted_circle:
-            xc, yc, r, roundness = last_fitted_circle
-            cv2.circle(frame, (xc, yc), r, (255, 0, 0), 2)
+        # 手が画面外に出た場合も軌跡と真円度を表示
+        if not hand_detected and last_roundness is not None:
+            for i in range(1, len(trajectory)):
+                cv2.line(frame, trajectory[i - 1], trajectory[i], (0, 255, 0), 2)
+
             cv2.putText(
                 frame,
-                f"Roundness: {roundness:.2f}%",
+                f"Roundness: {last_roundness:.2f}%",
                 (10, 50),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 1,
@@ -127,11 +125,10 @@ def main():
                 x_vals = np.array([p[0] for p in trajectory])
                 y_vals = np.array([p[1] for p in trajectory])
                 xc, yc, r = calc_circle_fitting(x_vals, y_vals)
-                roundness = calculate_roundness(x_vals, y_vals, xc, yc, r)
+                last_roundness = calculate_roundness(x_vals, y_vals, xc, yc, r)
 
-                log_roundness(roundness)
+                log_roundness(last_roundness)
                 trajectory = []  # 軌跡をリセット
-                last_fitted_circle = None
 
         cv2.imshow("Circle Drawing Test", frame)
 
